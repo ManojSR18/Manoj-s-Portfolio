@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manoj — CS Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0e0c;
+    --bg-raised: #17150f;
+    --bg-terminal: #131110;
+    --border: #2b2822;
+    --border-soft: #201e19;
+    --text: #ecebe4;
+    --text-dim: #948e7d;
+    --text-faint: #5c574a;
+    --accent: #8a7cf8;
+    --accent-dim: #5b4fc4;
+    --add: #7fd48a;
+    --add-dim: #3d5f42;
+    --amber: #e8b354;
+    --radius: 10px;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
+    background-size: 64px 64px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  a { color: inherit; }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ---------- NAV ---------- */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(10px);
+    background: rgba(15, 14, 12, 0.85);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.02em;
+  }
+  .nav-brand span { color: var(--accent); }
+  .nav-links {
+    display: flex;
+    gap: 28px;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .nav-links a { text-decoration: none; transition: color 0.15s; }
+  .nav-links a:hover { color: var(--text); }
+
+  /* ---------- HERO / TERMINAL ---------- */
+  .hero {
+    padding: 90px 0 70px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--add);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--add);
+    box-shadow: 0 0 0 3px var(--add-dim);
+  }
+
+  .terminal {
+    background: var(--bg-terminal);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #e0645c; }
+  .dot.y { background: #e5b558; }
+  .dot.g { background: #62c483; }
+  .terminal-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-left: 8px;
+  }
+  .terminal-body {
+    padding: 28px 24px 32px;
+    font-family: var(--mono);
+    font-size: 14px;
+    min-height: 210px;
+  }
+  .term-line { margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .prompt { color: var(--accent); flex-shrink: 0; }
+  .term-out { color: var(--text-dim); }
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--text);
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .cursor { animation: none; }
+  }
+
+  .hero-name {
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: clamp(32px, 5.5vw, 52px);
+    letter-spacing: -0.03em;
+    margin: 28px 0 10px;
+  }
+  .hero-tag {
+    color: var(--text-dim);
+    font-size: 17px;
+    max-width: 520px;
+  }
+  .hero-links {
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    text-decoration: none;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #12101f;
+    font-weight: 700;
+  }
+  .btn.primary:hover { background: #9a8dff; }
+  .btn:not(.primary):hover { border-color: var(--text-dim); color: var(--text); }
+
+  /* ---------- SECTIONS ---------- */
+  section { padding: 64px 0; border-top: 1px solid var(--border-soft); }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 36px;
+  }
+  .section-num {
+    font-family: var(--mono);
+    color: var(--text-faint);
+    font-size: 13px;
+  }
+  .section-title {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+  }
+
+  /* about */
+  .about-block {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 26px 28px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.9;
+  }
+  .about-block .comment { color: var(--text-faint); }
+  .about-block .string { color: var(--add); }
+
+  /* projects — git log style */
+  .log-entry {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 20px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .log-entry:first-of-type { padding-top: 0; }
+  .log-hash {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-faint);
+  }
+  .log-title { font-weight: 600; font-size: 16px; margin-bottom: 6px; }
+  .log-desc { color: var(--text-dim); font-size: 14px; margin-bottom: 10px; }
+  .log-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  .empty-log {
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    font-family: var(--mono);
+  }
+  .empty-log .out-line { color: var(--text-faint); font-size: 13px; margin-bottom: 6px; }
+  .empty-log .headline { font-size: 16px; color: var(--text); margin: 14px 0 6px; font-weight: 700;}
+  .empty-log .sub { color: var(--text-dim); font-size: 13px; max-width: 420px; margin: 0 auto; }
+
+  /* skills */
+  .skills-file {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 26px;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  .skills-file .k { color: var(--accent); }
+  .skills-file .v { color: var(--add); }
+  .skills-file .punct { color: var(--text-faint); }
+  .skills-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+  .skill-group-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+  }
+
+  /* footer */
+  footer {
+    padding: 50px 0 60px;
+    border-top: 1px solid var(--border-soft);
+    text-align: center;
+  }
+  footer .out-line {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-faint);
+    margin-bottom: 18px;
+  }
+  .footer-links { display: flex; justify-content: center; gap: 22px; font-family: var(--mono); font-size: 13px; }
+  .footer-links a { text-decoration: none; color: var(--text-dim); }
+  .footer-links a:hover { color: var(--text); }
+
+  @media (max-width: 600px) {
+    .nav-links { gap: 16px; font-size: 12px; }
+    .log-entry { grid-template-columns: 1fr; gap: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="nav-brand">~/<span>portfolio</span></div>
+    <ul class="nav-links">
+      <li><a href="#about">about</a></li>
+      <li><a href="#projects">projects</a></li>
+      <li><a href="#skills">skills</a></li>
+      <li><a href="#contact">contact</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">building in public</div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="terminal-title">student@cs-adv-topics: ~</span>
+      </div>
+      <div class="terminal-body" id="termBody">
+        <!-- typed lines injected by JS -->
+      </div>
+    </div>
+
+    <h1 class="hero-name">Manoj</h1>
+    <p class="hero-tag">CS Advanced Topics student, building projects one commit at a time. This site tracks everything I make this year — replace this line with your own one-liner.</p>
+
+    <div class="hero-links">
+      <a class="btn primary" href="#projects">view projects</a>
+      <a class="btn" href="https://github.com/ManojSR18" target="_blank" rel="noopener">github ↗</a>
+      <a class="btn" href="#contact">contact</a>
+    </div>
+  </div>
+</header>
+
+<section id="about">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">01</span>
+      <span class="section-title">about.md</span>
+    </div>
+    <div class="about-block">
+      <span class="comment"># a bit about me</span><br><br>
+      I'm a student taking CS Advanced Topics, currently learning
+      <span class="string">"[e.g. algorithms, data structures, systems]"</span>.
+      This portfolio is where I'll post every project from the class as I finish it —
+      think of it as my build log for the year.<br><br>
+      <span class="comment"># currently exploring</span><br>
+      <span class="string">"[replace with what you're learning right now]"</span>
+    </div>
+  </div>
+</section>
+
+<section id="projects">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">02</span>
+      <span class="section-title">git log --projects</span>
+    </div>
+
+    <!-- EMPTY STATE: shown while there are no projects yet.
+         Once you add a project, delete this block and use
+         a .log-entry block per project (template below). -->
+    <div class="empty-log">
+      <div class="out-line">$ git log --oneline --all</div>
+      <div class="out-line">fatal: no commits yet on any branch</div>
+      <div class="headline">No projects pushed yet</div>
+      <p class="sub">This is where every project from CS Advanced Topics will live. First commit coming soon.</p>
+    </div>
+
+    <!--
+    TEMPLATE — copy this block for each finished project,
+    one .log-entry per project, newest first:
+
+    <div class="log-entry">
+      <div class="log-hash">a1b2c3d</div>
+      <div>
+        <div class="log-title"><a href="LINK_TO_REPO" target="_blank" rel="noopener">Project Name</a></div>
+        <div class="log-desc">One or two sentences on what it does and why you built it.</div>
+        <div class="log-tags">
+          <span class="tag">python</span>
+          <span class="tag">flask</span>
+        </div>
+      </div>
+    </div>
+    -->
+  </div>
+</section>
+
+<section id="skills">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-num">03</span>
+      <span class="section-title">skills.json</span>
+    </div>
+    <div class="skills-file">
+      <span class="punct">{</span><br>
+      &nbsp;&nbsp;<span class="k">"languages"</span><span class="punct">:</span> [<span class="v">"python"</span>, <span class="v">"java"</span>, <span class="v">"javascript"</span>]<span class="punct">,</span><br>
+      &nbsp;&nbsp;<span class="k">"currently_learning"</span><span class="punct">:</span> [<span class="v">"..."</span>]<span class="punct">,</span><br>
+      &nbsp;&nbsp;<span class="k">"tools"</span><span class="punct">:</span> [<span class="v">"git"</span>, <span class="v">"vscode"</span>]<br>
+      <span class="punct">}</span>
+    </div>
+
+    <div class="skills-groups">
+      <div>
+        <div class="skill-group-label">languages</div>
+        <div class="pill-row">
+          <span class="pill">Python</span>
+          <span class="pill">Java</span>
+          <span class="pill">JavaScript</span>
+        </div>
+      </div>
+      <div>
+        <div class="skill-group-label">tools</div>
+        <div class="pill-row">
+          <span class="pill">Git</span>
+          <span class="pill">VS Code</span>
+          <span class="pill">GitHub</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer id="contact">
+  <div class="wrap">
+    <div class="out-line">$ cat contact.txt</div>
+    <div class="footer-links">
+      <a href="mailto:18msrinivasan@gmail.com">email</a>
+      <a href="tel:2247152592">224-715-2592</a>
+      <a href="https://github.com/ManojSR18" target="_blank" rel="noopener">github</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const lines = [
+    { prompt: '$', text: 'whoami', out: 'manoj — CS Advanced Topics student' },
+    { prompt: '$', text: 'ls projects/', out: '(empty — first push coming soon)' },
+    { prompt: '$', text: 'echo $STATUS', out: 'actively learning, building, shipping' }
+  ];
+
+  const termBody = document.getElementById('termBody');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function renderStatic() {
+    termBody.innerHTML = lines.map(l =>
+      `<div class="term-line"><span class="prompt">${l.prompt}</span><span>${l.text}</span></div>
+       <div class="term-line"><span class="term-out">${l.out}</span></div>`
+    ).join('');
+  }
+
+  if (reduceMotion) {
+    renderStatic();
+  } else {
+    let li = 0, ci = 0, phase = 'type';
+    const lineEls = [];
+
+    function step() {
+      if (li >= lines.length) {
+        const cur = document.createElement('span');
+        cur.className = 'cursor';
+        termBody.appendChild(cur);
+        return;
+      }
+      const current = lines[li];
+
+      if (!lineEls[li]) {
+        const wrap = document.createElement('div');
+        wrap.className = 'term-line';
+        wrap.innerHTML = `<span class="prompt">${current.prompt}</span><span class="typed"></span>`;
+        termBody.appendChild(wrap);
+        lineEls[li] = wrap;
+      }
+
+      if (phase === 'type') {
+        const typedSpan = lineEls[li].querySelector('.typed');
+        ci++;
+        typedSpan.textContent = current.text.slice(0, ci);
+        if (ci >= current.text.length) {
+          phase = 'out';
+          setTimeout(step, 260);
+          return;
+        }
+        setTimeout(step, 32);
+        return;
+      }
+
+      if (phase === 'out') {
+        const outWrap = document.createElement('div');
+        outWrap.className = 'term-line';
+        outWrap.innerHTML = `<span class="term-out">${current.out}</span>`;
+        termBody.appendChild(outWrap);
+        li++; ci = 0; phase = 'type';
+        setTimeout(step, 380);
+        return;
+      }
+    }
+    step();
+  }
+</script>
+
+</body>
+</html>
