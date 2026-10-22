@@ -266,6 +266,10 @@
     color: var(--text-dim);
   }
 
+  .log-links { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; font-family: var(--mono); font-size: 12.5px; }
+  .log-links a { color: var(--accent); text-decoration: none; }
+  .log-links a:hover { text-decoration: underline; }
+
   .empty-log {
     border: 1px dashed var(--border);
     border-radius: var(--radius);
@@ -399,14 +403,45 @@
       <span class="section-title">git log --projects</span>
     </div>
 
-    <!-- EMPTY STATE: shown while there are no projects yet.
-         Once you add a project, delete this block and use
-         a .log-entry block per project (template below). -->
-    <div class="empty-log">
-      <div class="out-line">$ git log --oneline --all</div>
-      <div class="out-line">fatal: no commits yet on any branch</div>
-      <div class="headline">No projects pushed yet</div>
-      <p class="sub">This is where every project from CS Advanced Topics will live. First commit coming soon.</p>
+    <div class="log-entry">
+      <div class="log-hash">cc07c39</div>
+      <div>
+        <div class="log-title"><a href="projects/premier-league/" target="_blank" rel="noopener">Premier League 2026-27 Predictions</a></div>
+        <div class="log-desc">Predicts every remaining Premier League match with a machine-learning model: a blend of three Poisson goals models trained on 829 matches and 25,000+ player-match rows (xG, xA, ratings, tackles). It plays out the rest of the season with realistic scores, predicts scorers, assists and player ratings, and uses an analysis of variance to separate skill from luck. Runs entirely in the browser.</div>
+        <div class="log-tags">
+          <span class="tag">python</span>
+          <span class="tag">pandas</span>
+          <span class="tag">scikit-learn</span>
+          <span class="tag">poisson regression</span>
+          <span class="tag">monte carlo</span>
+          <span class="tag">anova</span>
+          <span class="tag">javascript</span>
+        </div>
+        <div class="log-links">
+          <a href="projects/premier-league/" target="_blank" rel="noopener">predicted season ↗</a>
+          <a href="projects/premier-league/fulltime-forecast.html" target="_blank" rel="noopener">match predictions ↗</a>
+          <a href="https://github.com/ManojSR18/champions-league" target="_blank" rel="noopener">repo ↗</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-hash">f186b48</div>
+      <div>
+        <div class="log-title"><a href="projects/traffic-signal/" target="_blank" rel="noopener">Traffic Signal Optimization</a></div>
+        <div class="log-desc">Forecasts NYC traffic volume 15 minutes ahead from city count data, compares a linear model, a decision tree and a random forest, then uses the forecast to retime a traffic signal and cut queues and delay.</div>
+        <div class="log-tags">
+          <span class="tag">python</span>
+          <span class="tag">machine learning</span>
+          <span class="tag">random forest</span>
+          <span class="tag">optimization</span>
+          <span class="tag">javascript</span>
+        </div>
+        <div class="log-links">
+          <a href="projects/traffic-signal/" target="_blank" rel="noopener">live demo ↗</a>
+          <a href="https://github.com/ManojSR18/Traffic-Signal-Project" target="_blank" rel="noopener">repo ↗</a>
+        </div>
+      </div>
     </div>
 
     <!--
@@ -477,7 +512,7 @@
 <script>
   const lines = [
     { prompt: '$', text: 'whoami', out: 'manoj — CS Advanced Topics student' },
-    { prompt: '$', text: 'ls projects/', out: '(empty — first push coming soon)' },
+    { prompt: '$', text: 'ls projects/', out: 'premier-league/  traffic-signal/' },
     { prompt: '$', text: 'echo $STATUS', out: 'actively learning, building, shipping' }
   ];
 

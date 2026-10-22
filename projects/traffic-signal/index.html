@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic Prediction Studio — NYC volume counts</title>
+<style>
+  :root{
+    --bg:#071624;
+    --panel:#0b2033;
+    --panel-2:#0e2942;
+    --edge:#194366;
+    --edge-soft:rgba(255,255,255,0.07);
+    --ink:#e8f1fb;
+    --muted:#8ea8c6;
+    --dim:#5f7997;
+    --signal:#ffb020;
+    --go:#3ddc97;
+    --stop:#ff5d5d;
+    --lr:#6aa9ff;
+    --tree:#c792ea;
+    --rf:#3ddc97;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+  button,select,input{font-family:inherit;}
+  button{cursor:pointer;}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--signal);outline-offset:2px;}
+  h2,h3{letter-spacing:-0.3px;}
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky;top:0;z-index:10;background:rgba(11,32,51,.96);
+    border-bottom:1px solid var(--edge);backdrop-filter:blur(6px);
+  }
+  .head-top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px 22px;}
+  .mark{display:flex;align-items:center;gap:11px;margin-right:auto;}
+  .mark .glyph{width:30px;height:30px;border-radius:50%;border:2px solid var(--signal);display:grid;place-items:center;flex:none;}
+  .mark .glyph i{width:10px;height:10px;border-radius:50%;background:var(--signal);display:block;}
+  .mark h1{margin:0;font-size:16px;font-weight:650;}
+  .mark p{margin:0;font-size:11.5px;color:var(--dim);}
+  #runAll{
+    background:var(--go);color:#04291a;border:none;border-radius:7px;
+    padding:10px 18px;font-weight:700;font-size:13.5px;
+  }
+  #runAll:hover:not(:disabled){filter:brightness(1.07);}
+  #runAll:disabled{opacity:.45;cursor:not-allowed;}
+  #status{font-size:12.5px;color:var(--muted);min-width:190px;text-align:right;}
+
+  .rail{display:flex;gap:6px;padding:0 22px 10px;overflow-x:auto;}
+  .chip{
+    display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dim);
+    border:1px solid var(--edge);border-radius:20px;padding:4px 11px;white-space:nowrap;background:var(--bg);
+  }
+  .chip b{width:16px;height:16px;border-radius:50%;background:var(--edge);color:var(--bg);
+    display:grid;place-items:center;font-size:9.5px;font-weight:700;}
+  .chip.active{color:var(--signal);border-color:var(--signal);}
+  .chip.active b{background:var(--signal);color:#241700;}
+  .chip.done{color:var(--go);border-color:rgba(61,220,151,.4);}
+  .chip.done b{background:var(--go);color:#04291a;}
+
+  /* ---------- layout ---------- */
+  main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;padding:22px;max-width:1500px;margin:0 auto;align-items:start;}
+  section{
+    background:var(--panel);border:1px solid var(--edge);border-radius:12px;
+    padding:18px 20px 20px;margin-bottom:18px;opacity:.55;transition:opacity .35s;
+  }
+  section.live{opacity:1;}
+  section > h2{margin:0 0 3px;font-size:17px;font-weight:650;}
+  section > h2 .step{color:var(--dim);font-size:12px;font-weight:500;margin-left:8px;}
+  section > .lede{margin:0 0 16px;color:var(--muted);font-size:13px;max-width:74ch;}
+  h3{font-size:13px;font-weight:600;margin:20px 0 8px;color:var(--ink);}
+  .note{font-size:12px;color:var(--dim);margin:8px 0 0;}
+
+  /* console */
+  aside{position:sticky;top:104px;}
+  .console-wrap{background:#04121e;border:1px solid var(--edge);border-radius:12px;overflow:hidden;}
+  .console-bar{
+    display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--edge);
+    font-size:11.5px;color:var(--dim);
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--edge);}
+  .dot.run{background:var(--signal);}
+  .dot.ok{background:var(--go);}
+  pre#log{
+    margin:0;padding:12px 13px;height:calc(100vh - 190px);min-height:320px;overflow:auto;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11.4px;line-height:1.62;
+    color:var(--muted);white-space:pre-wrap;word-break:break-word;
+  }
+  #log .cmt{color:var(--dim);}
+  #log .val{color:var(--go);}
+  #log .warn{color:var(--signal);}
+  #log .hd{color:var(--ink);font-weight:600;}
+
+  /* funnel */
+  .funnel{display:flex;flex-direction:column;gap:5px;}
+  .fstep{display:grid;grid-template-columns:210px 1fr 118px;gap:12px;align-items:center;font-size:12.3px;}
+  .fstep .lbl{color:var(--muted);}
+  .ftrack{height:22px;background:var(--panel-2);border-radius:4px;overflow:hidden;}
+  .ftrack i{display:block;height:100%;background:linear-gradient(90deg,#2b6ea8,#6aa9ff);width:0;transition:width .5s;}
+  .fstep .num{text-align:right;font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+  .fstep .num s{color:var(--stop);text-decoration:none;}
+
+  /* tables */
+  .scroll-x{overflow-x:auto;}
+  table.grid{border-collapse:collapse;font-size:11.6px;font-variant-numeric:tabular-nums;width:100%;}
+  table.grid th{text-align:left;color:var(--dim);font-weight:500;padding:6px 11px 6px 0;border-bottom:1px solid var(--edge);white-space:nowrap;}
+  table.grid td{padding:5px 11px 5px 0;border-bottom:1px solid var(--edge-soft);white-space:nowrap;}
+  table.grid td.bad{color:var(--stop);}
+  table.grid td.new{color:var(--signal);}
+  table.grid tr.drop td{color:var(--dim);text-decoration:line-through;}
+
+  /* lag diagram */
+  .lagstrip{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
+  .lagbox{
+    border:1px solid var(--edge);border-radius:8px;padding:9px 12px;min-width:96px;background:var(--panel-2);
+  }
+  .lagbox .t{font-size:10.5px;color:var(--dim);}
+  .lagbox .v{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums;}
+  .lagbox.now{border-color:var(--signal);}
+  .lagbox.now .v{color:var(--signal);}
+  .lagbox.tgt{border-color:var(--go);border-style:dashed;}
+  .lagbox.tgt .v{color:var(--go);}
+  .arrow{color:var(--dim);font-size:18px;align-self:center;}
+
+  /* split bar */
+  .splitbar{display:flex;height:44px;border-radius:8px;overflow:hidden;border:1px solid var(--edge);}
+  .splitbar div{display:flex;flex-direction:column;justify-content:center;padding:0 14px;font-size:12px;}
+  .splitbar .tr{background:rgba(106,169,255,.22);}
+  .splitbar .te{background:rgba(255,176,32,.22);}
+  .splitbar b{font-size:15px;font-variant-numeric:tabular-nums;}
+
+  /* model cards */
+  .models{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;}
+  .model{background:var(--panel-2);border:1px solid var(--edge);border-radius:10px;padding:13px 14px;position:relative;overflow:hidden;}
+  .model.best{border-color:var(--go);}
+  .model .badge{position:absolute;top:10px;right:12px;font-size:10px;color:#04291a;background:var(--go);border-radius:20px;padding:2px 8px;font-weight:700;display:none;}
+  .model.best .badge{display:block;}
+  .model h4{margin:0 0 2px;font-size:13.5px;font-weight:600;}
+  .model .algo{font-size:11px;color:var(--dim);margin-bottom:10px;}
+  .metric{display:flex;justify-content:space-between;font-size:12.3px;margin:3px 0;font-variant-numeric:tabular-nums;}
+  .metric span{color:var(--muted);}
+  .prog{height:4px;background:rgba(255,255,255,.08);border-radius:3px;margin-top:10px;overflow:hidden;}
+  .prog i{display:block;height:100%;width:0;background:var(--signal);transition:width .12s linear;}
+
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;}
+  .field label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px;}
+  select,input[type=range]{background:var(--panel-2);color:var(--ink);border:1px solid var(--edge);border-radius:6px;padding:6px 9px;font-size:12.5px;}
+  input[type=range]{padding:0;accent-color:var(--signal);}
+  .seg{display:flex;border:1px solid var(--edge);border-radius:7px;overflow:hidden;}
+  .seg button{background:transparent;border:none;color:var(--muted);padding:7px 13px;font-size:12.5px;}
+  .seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--ink);}
+
+  .chart-wrap{position:relative;}
+  canvas.chart{width:100%;display:block;}
+  .tip{
+    position:absolute;pointer-events:none;background:#04121e;border:1px solid var(--edge);
+    border-radius:6px;padding:6px 9px;font-size:11.5px;white-space:nowrap;display:none;z-index:3;
+  }
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0;}
+  .kpi{background:var(--panel-2);border:1px solid var(--edge);border-radius:9px;padding:11px 13px;}
+  .kpi .v{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums;}
+  .kpi .k{font-size:11.3px;color:var(--dim);}
+  .kpi.win{border-color:var(--go);} .kpi.win .v{color:var(--go);}
+
+  .sig-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .sig{background:var(--panel-2);border:1px solid var(--edge);border-radius:10px;padding:12px;}
+  .sig.opt{border-color:var(--go);}
+  .sig h4{margin:0 0 8px;font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;}
+  .sig h4 span{color:var(--dim);font-weight:400;font-family:ui-monospace,Menlo,monospace;}
+  .sig canvas{width:100%;display:block;border-radius:6px;background:#081c2d;}
+  .sig .live{display:flex;justify-content:space-between;font-size:11.8px;margin-top:8px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .sig .live b{color:var(--ink);}
+
+  .pill{display:inline-block;font-size:11px;border:1px solid var(--edge);border-radius:20px;padding:2px 9px;color:var(--muted);margin-right:6px;}
+  .empty{color:var(--dim);font-size:12.5px;padding:14px 0;}
+
+  @media (max-width:1180px){
+    main{grid-template-columns:minmax(0,1fr);}
+    aside{position:static;}
+    pre#log{height:260px;min-height:0;}
+    .two,.sig-pair{grid-template-columns:1fr;}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-top">
+    <div class="mark">
+      <div class="glyph"><i></i></div>
+      <div>
+        <h1>Traffic Prediction Studio</h1>
+        <p>NYC volume counts → forecast the next 15 minutes → retime the signal</p>
+      </div>
+    </div>
+    <div id="status">Ready to run</div>
+    <button id="runAll">Run the pipeline</button>
+  </div>
+  <div class="rail" id="rail"></div>
+</header>
+
+<main>
+  <div id="report">
+
+    <section id="s-load">
+      <h2>Loading and cleaning<span class="step">steps 1–13</span></h2>
+      <p class="lede">The count file arrives with text in the volume column, negative readings, duplicate rows and
+        years outside the study window. Every filter below is one line of the script; the bar shows what survives it.</p>
+      <div class="funnel" id="funnel"></div>
+      <h3>Rows the cleaning removes</h3>
+      <div class="scroll-x"><table class="grid" id="dirtyTable"></table></div>
+      <p class="note" id="dirtyNote"></p>
+    </section>
+
+    <section id="s-feat">
+      <h2>Building the features<span class="step">steps 6–13</span></h2>
+      <p class="lede">Each record looks one hour into the past and 15 minutes into the future. A row only survives if
+        all five neighbouring counts are exactly 15 minutes apart, which is what the timestamp check enforces.</p>
+      <div class="lagstrip" id="lagstrip"></div>
+      <h3>X.head() after get_dummies</h3>
+      <div class="scroll-x"><table class="grid" id="featTable"></table></div>
+      <p class="note" id="featNote"></p>
+    </section>
+
+    <section id="s-split">
+      <h2>Train and test split<span class="step">step 18</span></h2>
+      <p class="lede">The split is chronological, not random: the models learn from 2025 and are judged on 2026 they
+        have never seen. A random split would leak the future into training through the lag columns.</p>
+      <div class="splitbar" id="splitbar"></div>
+      <p class="note" id="splitNote"></p>
+    </section>
+
+    <section id="s-train">
+      <h2>Training three models<span class="step">steps 19–25</span></h2>
+      <p class="lede">Same features, three ways of using them: a straight line, one deep tree, then a hundred trees
+        voting. Metrics are computed on the 2026 test set only.</p>
+      <div class="models" id="modelCards"></div>
+      <div class="two" style="margin-top:18px">
+        <div>
+          <h3>Error on the test set</h3>
+          <div class="chart-wrap"><canvas class="chart" id="chartErr" style="height:220px"></canvas></div>
+          <p class="note">Lower is better. MAE is the average miss in vehicles per 15 minutes; RMSE punishes big misses.</p>
+        </div>
+        <div>
+          <h3>Variance explained (R²)</h3>
+          <div class="chart-wrap"><canvas class="chart" id="chartR2" style="height:220px"></canvas></div>
+          <p class="note">Share of the movement in traffic volume the model reproduces. 1.0 would be perfect.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="s-pred">
+      <h2>What the predictions look like<span class="step">step 26</span></h2>
+      <p class="lede">Metrics hide where a model fails. These views show it: the scatter should hug the diagonal, the
+        residuals should be centred on zero, and the forecast should track the real peak rather than lag behind it.</p>
+      <div class="controls">
+        <div class="field">
+          <label>Model</label>
+          <div class="seg" id="modelPick">
+            <button data-m="lr">Linear</button>
+            <button data-m="tree">Tree</button>
+            <button data-m="rf" aria-pressed="true">Forest</button>
+          </div>
+        </div>
+        <div class="field"><label for="predSeg">Count location</label><select id="predSeg"></select></div>
+        <div class="field"><label for="predDay">Test day</label><select id="predDay"></select></div>
+      </div>
+      <div class="two">
+        <div>
+          <h3>Predicted against actual</h3>
+          <div class="chart-wrap"><canvas class="chart" id="chartScatter" style="height:250px"></canvas></div>
+        </div>
+        <div>
+          <h3>Residuals</h3>
+          <div class="chart-wrap"><canvas class="chart" id="chartResid" style="height:250px"></canvas></div>
+        </div>
+      </div>
+      <h3 id="seriesTitle">One day at one count station</h3>
+      <div class="chart-wrap">
+        <canvas class="chart" id="chartSeries" style="height:250px"></canvas>
+        <div class="tip" id="seriesTip"></div>
+      </div>
+      <p class="note">Solid line is the counted volume, dashed is the forecast made 15 minutes earlier.</p>
+
+      <h3>What the forest actually uses</h3>
+      <div class="chart-wrap"><canvas class="chart" id="chartImp" style="height:230px"></canvas></div>
+      <p class="note">Share of the total variance reduction each column contributes across all 100 trees.</p>
+    </section>
+
+    <section id="s-opt">
+      <h2>Retiming the signal<span class="step">steps 26–29</span></h2>
+      <p class="lede">The forecast becomes demand: northbound plus southbound is the north–south phase, eastbound plus
+        westbound is east–west. Sixty seconds of green get divided between them to minimise the delay proxy
+        <span class="mono">NS·((C−g<sub>ns</sub>)/C)² + EW·(g<sub>ns</sub>/C)²</span>.</p>
+      <div class="controls">
+        <div class="field"><label for="optHour">Demand from hour</label><select id="optHour"></select></div>
+      </div>
+      <div class="kpis" id="demandKpis"></div>
+      <div class="two">
+        <div>
+          <h3>The delay surface</h3>
+          <div class="chart-wrap">
+            <canvas class="chart" id="chartObj" style="height:250px"></canvas>
+            <div class="tip" id="objTip"></div>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label for="gSlider">Try a green split yourself — north–south green <b id="gLabel" class="mono">30 s</b></label>
+            <input type="range" id="gSlider" min="10" max="50" step="0.1" value="30" style="width:100%">
+          </div>
+          <p class="note" id="objNote"></p>
+        </div>
+        <div>
+          <h3>Fixed timing against optimised</h3>
+          <div class="kpis" id="optKpis"></div>
+          <p class="note" id="optNote"></p>
+        </div>
+      </div>
+
+      <h3>Both signals running on the forecast demand</h3>
+      <div class="sig-pair">
+        <div class="sig">
+          <h4>Fixed 30 / 30 <span id="fixedSplit">30 s · 30 s</span></h4>
+          <canvas id="sigFixed" height="230"></canvas>
+          <div class="live"><span>queue NS <b id="fq1">0</b> · EW <b id="fq2">0</b></span><span>delay <b id="fd">0</b> veh·s</span></div>
+        </div>
+        <div class="sig opt">
+          <h4>Optimised split <span id="optSplit">— s · — s</span></h4>
+          <canvas id="sigOpt" height="230"></canvas>
+          <div class="live"><span>queue NS <b id="oq1">0</b> · EW <b id="oq2">0</b></span><span>delay <b id="od">0</b> veh·s</span></div>
+        </div>
+      </div>
+      <p class="note" id="simNote">Both intersections receive identical arrivals derived from the forecast, at a
+        saturation flow of 3600 vehicles per hour of green. Delay is the running total of vehicle-seconds spent waiting.</p>
+    </section>
+  </div>
+
+  <aside>
+    <div class="console-wrap">
+      <div class="console-bar"><span class="dot" id="logDot"></span><span id="logTitle">notebook output</span></div>
+      <pre id="log"></pre>
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   0. SMALL UTILITIES
+   ========================================================================== */
+
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rnd = mulberry32(20260902);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt = (v, d) => Number(v).toFixed(d == null ? 2 : d);
+const fmtInt = v => Math.round(v).toLocaleString();
+
+const logEl = document.getElementById("log");
+function log(text, cls){
+  const span = document.createElement("span");
+  if(cls) span.className = cls;
+  span.textContent = text + "\n";
+  logEl.appendChild(span);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function status(t){ document.getElementById("status").textContent = t; }
+
+const STAGES = [
+  {id:"s-load",  name:"Load & clean"},
+  {id:"s-feat",  name:"Features"},
+  {id:"s-split", name:"Split"},
+  {id:"s-train", name:"Train"},
+  {id:"s-pred",  name:"Predict"},
+  {id:"s-opt",   name:"Optimise"}
+];
+(function buildRail(){
+  const rail = document.getElementById("rail");
+  STAGES.forEach((s, i) => {
+    const el = document.createElement("div");
+    el.className = "chip"; el.id = "chip-" + s.id;
+    el.innerHTML = "<b>" + (i + 1) + "</b><span>" + s.name + "</span>";
+    rail.appendChild(el);
+  });
+})();
+function stage(id, state){
+  const chip = document.getElementById("chip-" + id);
+  chip.classList.toggle("active", state === "active");
+  chip.classList.toggle("done", state === "done");
+  if(state === "active") document.getElementById(id).classList.add("live");
+}
+
+/* ==========================================================================
+   1. THE COUNT FILE
+   Stands in for Automated_Traffic_Volume_Counts.csv: one row per segment,
+   direction and 15-minute bin, on the days each location was surveyed.
+   ========================================================================== */
+
+const SEGMENTS = [
+  {id:79199, boro:"Manhattan",     street:"Broadway",        from:"W 42 St",        to:"W 43 St",         dirs:["NB","SB"], base:520},
+  {id:34521, boro:"Manhattan",     street:"2 Ave",           from:"E 59 St",        to:"E 60 St",         dirs:["SB"],       base:840},
+  {id:12078, boro:"Manhattan",     street:"Canal St",        from:"Lafayette St",   to:"Centre St",       dirs:["EB","WB"], base:610},
+  {id:55420, boro:"Brooklyn",      street:"Atlantic Ave",    from:"Flatbush Ave",   to:"4 Ave",           dirs:["EB","WB"], base:700},
+  {id:63311, boro:"Brooklyn",      street:"Ocean Pkwy",      from:"Church Ave",     to:"Ditmas Ave",      dirs:["NB","SB"], base:480},
+  {id:24870, boro:"Brooklyn",      street:"Bedford Ave",     from:"N 7 St",         to:"N 8 St",          dirs:["NB","SB"], base:300},
+  {id:91055, boro:"Queens",        street:"Queens Blvd",     from:"63 Dr",          to:"64 Rd",           dirs:["EB","WB"], base:980},
+  {id:47203, boro:"Queens",        street:"Northern Blvd",   from:"Main St",        to:"Union St",        dirs:["EB","WB"], base:640},
+  {id:18644, boro:"Bronx",         street:"Grand Concourse", from:"E 161 St",       to:"E 162 St",        dirs:["NB","SB"], base:560},
+  {id:70915, boro:"Bronx",         street:"Fordham Rd",      from:"Jerome Ave",     to:"Grand Concourse", dirs:["EB","WB"], base:430},
+  {id:38127, boro:"Staten Island", street:"Hylan Blvd",      from:"New Dorp Ln",    to:"Ebbitts St",      dirs:["NB","SB"], base:390},
+  {id:82650, boro:"Staten Island", street:"Richmond Ave",    from:"Forest Hill Rd", to:"Yukon Ave",       dirs:["NB","SB"], base:340}
+];
+const DIRS = ["EB","NB","SB","WB"];
+const BOROS = ["Bronx","Brooklyn","Manhattan","Queens","Staten Island"];
+
+const HOUR_WD = [0.25,0.15,0.10,0.09,0.12,0.30,0.70,1.25,1.65,1.35,1.05,1.05,
+                 1.10,1.10,1.15,1.35,1.70,1.85,1.60,1.20,0.95,0.75,0.55,0.38];
+const HOUR_WE = [0.45,0.32,0.22,0.15,0.12,0.18,0.30,0.45,0.65,0.90,1.15,1.35,
+                 1.45,1.50,1.50,1.45,1.40,1.35,1.25,1.10,0.95,0.85,0.70,0.55];
+const DOW_F = [0.98,1.02,1.04,1.05,1.12,0.92,0.78];
+const MON_F = [0.88,0.90,0.97,1.02,1.05,1.06,0.98,0.94,1.05,1.06,1.00,0.92];
+
+function dirBias(dir, h, weekend){
+  if(weekend) return 1;
+  const inbound = (dir === "NB" || dir === "EB");
+  if(h >= 6 && h <= 10) return inbound ? 1.18 : 0.86;
+  if(h >= 15 && h <= 19) return inbound ? 0.88 : 1.16;
+  return 1;
+}
+const dowOf = ts => (new Date(ts).getUTCDay() + 6) % 7;
+
+function buildCountFile(){
+  const rows = [];
+  let request = 0;
+  for(const s of SEGMENTS){
+    for(const dir of s.dirs){
+      request++;
+      const site = 0.9 + 0.2 * rnd();
+      const days = [];
+      for(let k = 0; k < 2; k++) days.push({y:2024, m:1 + Math.floor(rnd() * 12), d:1 + Math.floor(rnd() * 28)});
+      for(let k = 0; k < 6; k++) days.push({y:2025, m:1 + Math.floor(rnd() * 12), d:1 + Math.floor(rnd() * 28)});
+      for(let k = 0; k < 2; k++) days.push({y:2026, m:1 + Math.floor(rnd() * 5),  d:1 + Math.floor(rnd() * 28)});
+      for(const day of days){
+        const ts0 = Date.UTC(day.y, day.m - 1, day.d);
+        const dw = dowOf(ts0), weekend = dw >= 5;
+        const dayNoise = 0.92 + 0.16 * rnd();
+        for(let h = 0; h < 24; h++){
+          const hourly = s.base * (weekend ? HOUR_WE[h] : HOUR_WD[h]) * DOW_F[dw] * MON_F[day.m - 1]
+                       * dirBias(dir, h, weekend) * site * dayNoise * (0.95 + 0.1 * rnd());
+          for(let q = 0; q < 4; q++){
+            rows.push({
+              RequestID: 30000 + request, Boro: s.boro, Yr: day.y, M: day.m, D: day.d,
+              HH: h, MM: q * 15, Vol: String(Math.max(0, Math.round(hourly / 4 * (0.88 + 0.24 * rnd())))),
+              SegmentID: s.id, street: s.street, fromSt: s.from, toSt: s.to, Direction: dir
+            });
+          }
+        }
+      }
+    }
+  }
+  // the mess a real export carries
+  const dirt = {blank:0, neg:0, dup:0};
+  for(const r of rows){
+    const u = rnd();
+    if(u < 0.0035){ r.Vol = rnd() < 0.5 ? "" : "N/A"; dirt.blank++; }
+    else if(u < 0.0045){ r.Vol = String(-Math.ceil(rnd() * 9)); dirt.neg++; }
+  }
+  for(let k = 0; k < 260; k++){
+    const src = rows[Math.floor(rnd() * rows.length)];
+    rows.push(Object.assign({}, src));
+    dirt.dup++;
+  }
+  return {rows, dirt};
+}
+
+/* ==========================================================================
+   2. THE PIPELINE  (steps 1–13)
+   ========================================================================== */
+
+const S = {};                                     // everything computed lives here
+const FUNNEL = [];
+
+function funnelStep(label, n, removed){
+  FUNNEL.push({label, n, removed});
+  const wrap = document.getElementById("funnel");
+  const el = document.createElement("div");
+  el.className = "fstep";
+  el.innerHTML = "<div class='lbl'>" + label + "</div>" +
+    "<div class='ftrack'><i></i></div>" +
+    "<div class='num'>" + fmtInt(n) + (removed ? " <s>−" + fmtInt(removed) + "</s>" : "") + "</div>";
+  wrap.appendChild(el);
+  requestAnimationFrame(() => {
+    el.querySelector("i").style.width = (n / FUNNEL[0].n * 100).toFixed(2) + "%";
+  });
+}
+
+async function runPipeline(){
+  stage("s-load", "active");
+  status("Reading the count file…");
+  log("# STEP 1 — LOAD DATA", "cmt");
+
+  const built = buildCountFile();
+  let rows = built.rows;
+  S.dirt = built.dirt;
+  funnelStep("Rows read from the CSV", rows.length, 0);
+  log("Original dataset shape: (" + rows.length + ", 13)");
+  log("Columns: ['RequestID', 'Boro', 'Yr', 'M', 'D', 'HH', 'MM', 'Vol', 'SegmentID',\n          'street', 'fromSt', 'toSt', 'Direction']", "cmt");
+  await sleep(120);
+
+  // --- step 2/3: to_numeric then drop the NaNs ---
+  log("\n# STEP 2 — CONVERT VOLUME TO NUMERIC", "cmt");
+  let nan = 0;
+  const dirtyExamples = [];
+  rows.forEach(r => {
+    const v = Number(r.Vol);
+    r.VolNum = (r.Vol === "" || Number.isNaN(v)) ? null : v;
+    if(r.VolNum === null){ nan++; if(dirtyExamples.length < 3) dirtyExamples.push({r, why:"Vol is not numeric"}); }
+  });
+  log("Missing Vol after conversion: " + nan);
+  let kept = rows.filter(r => r.VolNum !== null);
+  funnelStep("drop rows with unreadable Vol", kept.length, rows.length - kept.length);
+  await sleep(90);
+
+  log("\n# STEP 3 — REMOVE INVALID VOLUMES", "cmt");
+  let before = kept.length;
+  kept.filter(r => r.VolNum < 0).slice(0, 2).forEach(r => {
+    if(dirtyExamples.length < 6) dirtyExamples.push({r, why:"negative count"});
+  });
+  kept = kept.filter(r => r.VolNum >= 0);
+  funnelStep("drop negative counts", kept.length, before - kept.length);
+  log("Shape after removing invalid volumes: (" + kept.length + ", 14)");
+  await sleep(90);
+
+  // --- step 4: duplicates ---
+  log("\n# STEP 4 — REMOVE DUPLICATES", "cmt");
+  before = kept.length;
+  const seen = new Set();
+  const deduped = [];
+  for(const r of kept){
+    const k = r.RequestID + "|" + r.SegmentID + "|" + r.Direction + "|" + r.Yr + "|" + r.M + "|" +
+              r.D + "|" + r.HH + "|" + r.MM + "|" + r.VolNum;
+    if(seen.has(k)){
+      if(dirtyExamples.length < 8) dirtyExamples.push({r, why:"exact duplicate row"});
+      continue;
+    }
+    seen.add(k); deduped.push(r);
+  }
+  kept = deduped;
+  funnelStep("drop duplicate rows", kept.length, before - kept.length);
+  log("Shape after removing duplicates: (" + kept.length + ", 14)");
+  await sleep(90);
+
+  // --- step 5: years ---
+  log("\n# STEP 5 — KEEP 2025 AND 2026", "cmt");
+  before = kept.length;
+  kept.filter(r => r.Yr === 2024).slice(0, 1).forEach(r => {
+    if(dirtyExamples.length < 10) dirtyExamples.push({r, why:"outside the 2025–2026 window"});
+  });
+  kept = kept.filter(r => r.Yr === 2025 || r.Yr === 2026);
+  funnelStep("keep 2025 and 2026 only", kept.length, before - kept.length);
+  log("Shape after filtering to 2025-2026: (" + kept.length + ", 14)");
+  renderDirtyTable(dirtyExamples);
+  await sleep(120);
+
+  // --- steps 6–8: timestamp, time features, sort ---
+  log("\n# STEP 6–8 — TIMESTAMP, TIME FEATURES, SORT", "cmt");
+  kept.forEach(r => {
+    r.ts = Date.UTC(r.Yr, r.M - 1, r.D, r.HH, r.MM);
+    r.dow = dowOf(r.ts);
+    r.weekend = r.dow >= 5 ? 1 : 0;
+    r.rush = (r.HH === 7 || r.HH === 8 || r.HH === 9 || r.HH === 16 || r.HH === 17 || r.HH === 18) ? 1 : 0;
+  });
+  kept.sort((a, b) =>
+    a.RequestID - b.RequestID || a.SegmentID - b.SegmentID ||
+    (a.Direction < b.Direction ? -1 : a.Direction > b.Direction ? 1 : 0) || a.ts - b.ts);
+
+  // --- steps 9–12: lags, target, 15-minute check ---
+  log("\n# STEP 9–12 — LAG FEATURES AND 15-MINUTE TARGET", "cmt");
+  const gkey = r => r.RequestID + "|" + r.SegmentID + "|" + r.Direction;
+  for(let i = 0; i < kept.length; i++){
+    const r = kept[i];
+    const k = gkey(r);
+    const g = j => (i - j >= 0 && gkey(kept[i - j]) === k) ? kept[i - j] : null;
+    const a = g(1), b = g(2), c = g(3), d = g(4);
+    const n = (i + 1 < kept.length && gkey(kept[i + 1]) === k) ? kept[i + 1] : null;
+    r.l1 = a ? a.VolNum : null; r.l2 = b ? b.VolNum : null;
+    r.l3 = c ? c.VolNum : null; r.l4 = d ? d.VolNum : null;
+    r.target = n ? n.VolNum : null;
+    r.spaced = !!(a && b && c && d && n &&
+      (r.ts - a.ts) === 900000 && (r.ts - b.ts) === 1800000 &&
+      (r.ts - c.ts) === 2700000 && (r.ts - d.ts) === 3600000 && (n.ts - r.ts) === 900000);
+    if(r.spaced) r.avg = (r.l1 + r.l2 + r.l3 + r.l4) / 4;
+  }
+  before = kept.length;
+  const ml = kept.filter(r => r.spaced);
+  funnelStep("keep rows with a complete 15-min window", ml.length, before - ml.length);
+  log("Final preprocessing shape: (" + ml.length + ", 24)");
+  log("ML dataset shape: (" + ml.length + ", 16)");
+  log("Missing values: 0", "val");
+
+  S.all = kept; S.ml = ml;
+  stage("s-load", "done");
+
+  // ---------- features ----------
+  stage("s-feat", "active");
+  status("Assembling the feature matrix…");
+  buildMatrices();
+  renderLagStrip();
+  renderFeatTable();
+  log("\n# STEP 17 — ENCODE CATEGORICAL VARIABLES", "cmt");
+  log("New X shape: (" + ml.length + ", " + S.FEATS.length + ")");
+  stage("s-feat", "done");
+  await sleep(150);
+
+  // ---------- split ----------
+  stage("s-split", "active");
+  log("\n# STEP 18 — TRAIN/TEST SPLIT (2025 train, 2026 test)", "cmt");
+  log("Training data: (" + S.TR.n + ", " + S.FEATS.length + ")");
+  log("Testing data:  (" + S.TE.n + ", " + S.FEATS.length + ")");
+  renderSplit();
+  stage("s-split", "done");
+  await sleep(150);
+
+  // ---------- models ----------
+  stage("s-train", "active");
+  await trainAll();
+  stage("s-train", "done");
+
+  // ---------- predictions ----------
+  stage("s-pred", "active");
+  status("Drawing predictions…");
+  initPredictionControls();
+  renderPredictions();
+  renderImportance();
+  stage("s-pred", "done");
+  await sleep(120);
+
+  // ---------- optimisation ----------
+  stage("s-opt", "active");
+  status("Optimising signal timing…");
+  initOptimisation();
+  stage("s-opt", "done");
+
+  status("Pipeline complete");
+  document.getElementById("logDot").className = "dot ok";
+  document.getElementById("logTitle").textContent = "notebook output — finished";
+  document.getElementById("runAll").disabled = false;
+  document.getElementById("runAll").textContent = "Run again";
+}
+
+function renderDirtyTable(examples){
+  const cols = ["Yr","M","D","HH","MM","Vol","SegmentID","Direction","Boro"];
+  let html = "<tr>" + cols.map(c => "<th>" + c + "</th>").join("") + "<th>removed because</th></tr>";
+  examples.forEach(ex => {
+    html += "<tr class='drop'>" + cols.map(c =>
+      "<td" + (c === "Vol" ? " class='bad'" : "") + ">" + ex.r[c] + "</td>").join("") +
+      "<td style='color:var(--stop)'>" + ex.why + "</td></tr>";
+  });
+  document.getElementById("dirtyTable").innerHTML = html;
+  document.getElementById("dirtyNote").textContent =
+    S.dirt.blank.toLocaleString() + " unreadable volumes, " + S.dirt.neg + " negative counts and " +
+    S.dirt.dup + " duplicated rows were seeded into the export, plus two survey days per location from 2024 " +
+    "that fall outside the study window.";
+}
+
+/* ==========================================================================
+   3. FEATURE MATRIX  (steps 14–17)
+   ========================================================================== */
+
+function buildMatrices(){
+  const FEATS = ["Vol","SegmentID","hour","minute","day_of_week","month","weekend","rush_hour",
+                 "volume_15min_ago","volume_30min_ago","volume_45min_ago","volume_60min_ago","avg_volume_last_hour"]
+    .concat(DIRS.slice(1).map(d => "Direction_" + d))
+    .concat(BOROS.slice(1).map(b => "Boro_" + b));
+  const P = FEATS.length;
+
+  function vec(r){
+    const v = [r.VolNum, r.SegmentID, r.HH, r.MM, r.dow, r.M, r.weekend, r.rush,
+               r.l1, r.l2, r.l3, r.l4, r.avg];
+    for(let i = 1; i < DIRS.length; i++) v.push(r.Direction === DIRS[i] ? 1 : 0);
+    for(let i = 1; i < BOROS.length; i++) v.push(r.Boro === BOROS[i] ? 1 : 0);
+    return v;
+  }
+  function matrix(rows){
+    const X = new Float32Array(rows.length * P), y = new Float32Array(rows.length);
+    rows.forEach((r, i) => {
+      const v = vec(r);
+      for(let j = 0; j < P; j++) X[i * P + j] = v[j];
+      y[i] = r.target;
+    });
+    return {X, y, n: rows.length};
+  }
+  S.FEATS = FEATS; S.P = P; S.vec = vec;
+  S.trainRows = S.ml.filter(r => r.Yr === 2025);
+  S.testRows  = S.ml.filter(r => r.Yr === 2026);
+  S.TR = matrix(S.trainRows);
+  S.TE = matrix(S.testRows);
+}
+
+function renderLagStrip(){
+  const r = S.testRows[Math.floor(S.testRows.length / 2)] || S.ml[0];
+  const wrap = document.getElementById("lagstrip");
+  const clock = mins => {
+    const t = new Date(r.ts + mins * 60000);
+    return String(t.getUTCHours()).padStart(2, "0") + ":" + String(t.getUTCMinutes()).padStart(2, "0");
+  };
+  const box = (cls, t, v, k) =>
+    "<div class='lagbox " + cls + "'><div class='t'>" + t + "</div><div class='v'>" + v +
+    "</div><div class='t'>" + k + "</div></div>";
+  wrap.innerHTML =
+    box("", clock(-60), r.l4, "volume_60min_ago") + "<span class='arrow'>→</span>" +
+    box("", clock(-45), r.l3, "volume_45min_ago") + "<span class='arrow'>→</span>" +
+    box("", clock(-30), r.l2, "volume_30min_ago") + "<span class='arrow'>→</span>" +
+    box("", clock(-15), r.l1, "volume_15min_ago") + "<span class='arrow'>→</span>" +
+    box("now", clock(0), r.VolNum, "Vol (now)") + "<span class='arrow'>⇒</span>" +
+    box("tgt", clock(15), r.target, "target_next_15min");
+}
+
+function renderFeatTable(){
+  const show = ["Vol","volume_15min_ago","volume_30min_ago","avg_volume_last_hour","hour","minute",
+                "day_of_week","weekend","rush_hour","Direction_NB","Direction_SB","Boro_Queens"];
+  const idx = show.map(c => S.FEATS.indexOf(c));
+  let html = "<tr>" + show.map(c => "<th>" + c + "</th>").join("") + "<th>y</th></tr>";
+  for(let i = 0; i < 6; i++){
+    const off = i * S.P;
+    html += "<tr>" + idx.map((j, k) =>
+      "<td" + (show[k].startsWith("volume") || show[k].startsWith("avg") ? " class='new'" : "") + ">" +
+      (Number.isInteger(S.TR.X[off + j]) ? S.TR.X[off + j] : fmt(S.TR.X[off + j], 2)) + "</td>").join("") +
+      "<td style='color:var(--go)'>" + S.TR.y[i] + "</td></tr>";
+  }
+  document.getElementById("featTable").innerHTML = html;
+  document.getElementById("featNote").textContent =
+    S.FEATS.length + " columns after one-hot encoding Direction and Boro with drop_first=True — " +
+    "13 numeric plus " + (DIRS.length - 1) + " direction dummies and " + (BOROS.length - 1) + " borough dummies.";
+}
+
+function renderSplit(){
+  const a = S.TR.n, b = S.TE.n, t = a + b;
+  document.getElementById("splitbar").innerHTML =
+    "<div class='tr' style='flex:" + a + "'><b>" + fmtInt(a) + "</b><span>2025 · training</span></div>" +
+    "<div class='te' style='flex:" + b + "'><b>" + fmtInt(b) + "</b><span>2026 · test</span></div>";
+  document.getElementById("splitNote").textContent =
+    (a / t * 100).toFixed(1) + "% of the usable rows are used for fitting and " + (b / t * 100).toFixed(1) +
+    "% are held back. Every test row sits after 1 January 2026.";
+}
+
+/* ==========================================================================
+   4. MODELS
+   ========================================================================== */
+
+function metrics(y, p){
+  const n = y.length;
+  let mean = 0;
+  for(let i = 0; i < n; i++) mean += y[i];
+  mean /= n;
+  let mae = 0, mse = 0, sst = 0;
+  for(let i = 0; i < n; i++){
+    const e = p[i] - y[i];
+    mae += Math.abs(e); mse += e * e;
+    sst += (y[i] - mean) * (y[i] - mean);
+  }
+  return {mae: mae / n, rmse: Math.sqrt(mse / n), r2: 1 - mse / sst};
+}
+
+/* ---- linear regression by normal equations ---- */
+function fitLinear(X, y, n, p){
+  const m = p + 1, A = [], b = new Float64Array(m);
+  for(let i = 0; i < m; i++) A.push(new Float64Array(m));
+  const xi = new Float64Array(m);
+  for(let i = 0; i < n; i++){
+    xi[0] = 1;
+    for(let j = 0; j < p; j++) xi[j + 1] = X[i * p + j];
+    for(let a = 0; a < m; a++){
+      for(let c = a; c < m; c++) A[a][c] += xi[a] * xi[c];
+      b[a] += xi[a] * y[i];
+    }
+  }
+  for(let a = 0; a < m; a++) for(let c = 0; c < a; c++) A[a][c] = A[c][a];
+  for(let a = 0; a < m; a++) A[a][a] += 1e-6 * (A[a][a] || 1);
+  for(let col = 0; col < m; col++){
+    let piv = col;
+    for(let r = col + 1; r < m; r++) if(Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    const tr = A[col]; A[col] = A[piv]; A[piv] = tr;
+    const tb = b[col]; b[col] = b[piv]; b[piv] = tb;
+    const d = A[col][col] || 1e-12;
+    for(let r = col + 1; r < m; r++){
+      const f = A[r][col] / d;
+      if(!f) continue;
+      for(let c = col; c < m; c++) A[r][c] -= f * A[col][c];
+      b[r] -= f * b[col];
+    }
+  }
+  const w = new Float64Array(m);
+  for(let r = m - 1; r >= 0; r--){
+    let s = b[r];
+    for(let c = r + 1; c < m; c++) s -= A[r][c] * w[c];
+    w[r] = s / (A[r][r] || 1e-12);
+  }
+  return w;
+}
+function predictLinear(w, X, n, p){
+  const out = new Float64Array(n);
+  for(let i = 0; i < n; i++){
+    let s = w[0];
+    for(let j = 0; j < p; j++) s += w[j + 1] * X[i * p + j];
+    out[i] = Math.max(0, s);
+  }
+  return out;
+}
+
+/* ---- CART regression tree on pre-bucketed features ---- */
+const NBUCK = 32;
+function makeThresholds(X, n, p){
+  const th = [];
+  for(let j = 0; j < p; j++){
+    const vals = [];
+    const stride = Math.max(1, Math.floor(n / 4000));
+    for(let i = 0; i < n; i += stride) vals.push(X[i * p + j]);
+    vals.sort((a, b) => a - b);
+    const uniq = Array.from(new Set(vals));
+    const t = [];
+    if(uniq.length <= NBUCK - 1){
+      for(let k = 0; k < uniq.length - 1; k++) t.push((uniq[k] + uniq[k + 1]) / 2);
+    } else {
+      for(let k = 1; k < NBUCK; k++){
+        const q = vals[Math.floor(vals.length * k / NBUCK)];
+        if(!t.length || q > t[t.length - 1]) t.push(q);
+      }
+    }
+    th.push(t);
+  }
+  return th;
+}
+function bucketize(X, n, p, th){
+  const B = new Uint8Array(n * p);
+  for(let j = 0; j < p; j++){
+    const t = th[j];
+    for(let i = 0; i < n; i++){
+      const v = X[i * p + j];
+      let lo = 0, hi = t.length;
+      while(lo < hi){ const mid = (lo + hi) >> 1; if(v <= t[mid]) hi = mid; else lo = mid + 1; }
+      B[i * p + j] = lo;
+    }
+  }
+  return B;
+}
+const _cnt = new Int32Array(NBUCK + 1), _sum = new Float64Array(NBUCK + 1);
+function growTree(indices, B, y, p, th, maxDepth, minSplit, featFrac, rand, imp){
+  function node(idx, depth){
+    const nn = idx.length;
+    let s = 0, sq = 0;
+    for(let i = 0; i < nn; i++){ const v = y[idx[i]]; s += v; sq += v * v; }
+    const mean = s / nn;
+    if(depth >= maxDepth || nn < minSplit) return {leaf: mean};
+    let best = null;
+    const feats = [];
+    if(featFrac >= 1){ for(let j = 0; j < p; j++) feats.push(j); }
+    else {
+      const want = Math.max(1, Math.round(p * featFrac)), used = new Set();
+      while(feats.length < want){
+        const j = Math.floor(rand() * p);
+        if(!used.has(j)){ used.add(j); feats.push(j); }
+      }
+    }
+    for(const j of feats){
+      const nb = th[j].length + 1;
+      for(let b = 0; b < nb; b++){ _cnt[b] = 0; _sum[b] = 0; }
+      for(let i = 0; i < nn; i++){
+        const bIdx = B[idx[i] * p + j];
+        _cnt[bIdx]++; _sum[bIdx] += y[idx[i]];
+      }
+      let cl = 0, sl = 0;
+      for(let b = 0; b < nb - 1; b++){
+        cl += _cnt[b]; sl += _sum[b];
+        if(cl === 0 || cl === nn) continue;
+        const cr = nn - cl, sr = s - sl;
+        const gain = sl * sl / cl + sr * sr / cr - s * s / nn;
+        if(!best || gain > best.gain) best = {gain, j, b, thr: th[j][b]};
+      }
+    }
+    if(!best || best.gain <= 1e-9) return {leaf: mean};
+    const L = [], R = [];
+    for(let i = 0; i < nn; i++){
+      if(B[idx[i] * p + best.j] <= best.b) L.push(idx[i]); else R.push(idx[i]);
+    }
+    if(!L.length || !R.length) return {leaf: mean};
+    if(imp) imp[best.j] += best.gain;
+    return {j: best.j, thr: best.thr, l: node(L, depth + 1), r: node(R, depth + 1)};
+  }
+  return node(indices, 0);
+}
+function predictTree(node, X, i, p){
+  while(node.leaf === undefined) node = X[i * p + node.j] <= node.thr ? node.l : node.r;
+  return node.leaf;
+}
+function countNodes(node){
+  return node.leaf !== undefined ? 1 : 1 + countNodes(node.l) + countNodes(node.r);
+}
+
+const MODELS = [
+  {key:"lr",   name:"Linear regression", algo:"LinearRegression()",                     color:"var(--lr)"},
+  {key:"tree", name:"Decision tree",     algo:"DecisionTreeRegressor(max_depth=10)",    color:"var(--tree)"},
+  {key:"rf",   name:"Random forest",     algo:"RandomForestRegressor(n_estimators=100)", color:"var(--rf)"}
+];
+const N_TREES = 100;
+
+function modelCards(){
+  document.getElementById("modelCards").innerHTML = MODELS.map(m =>
+    "<div class='model' id='card-" + m.key + "'>" +
+      "<span class='badge'>best</span>" +
+      "<h4 style='color:" + m.color + "'>" + m.name + "</h4>" +
+      "<div class='algo mono'>" + m.algo + "</div>" +
+      "<div class='metric'><span>MAE</span><b id='mae-" + m.key + "'>—</b></div>" +
+      "<div class='metric'><span>RMSE</span><b id='rmse-" + m.key + "'>—</b></div>" +
+      "<div class='metric'><span>R²</span><b id='r2-" + m.key + "'>—</b></div>" +
+      "<div class='prog'><i id='prog-" + m.key + "'></i></div>" +
+    "</div>").join("");
+}
+
+async function trainAll(){
+  modelCards();
+  const {TR, TE, P} = S;
+  S.pred = {}; S.metrics = {};
+
+  // linear
+  status("Fitting the linear regression…");
+  log("\n# STEP 19 — LINEAR REGRESSION", "cmt");
+  await sleep(60);
+  document.getElementById("prog-lr").style.width = "60%";
+  let t0 = performance.now();
+  const w = fitLinear(TR.X, TR.y, TR.n, P);
+  S.pred.lr = predictLinear(w, TE.X, TE.n, P);
+  S.metrics.lr = metrics(TE.y, S.pred.lr);
+  S.weights = w;
+  document.getElementById("prog-lr").style.width = "100%";
+  showMetrics("lr");
+  log("Linear Regression trained successfully! (" + Math.round(performance.now() - t0) + " ms)");
+  logMetrics("Linear Regression", S.metrics.lr);
+  await sleep(120);
+
+  // tree
+  status("Growing the decision tree…");
+  log("\n# STEP 21 — DECISION TREE", "cmt");
+  t0 = performance.now();
+  S.TH = makeThresholds(TR.X, TR.n, P);
+  S.BK = bucketize(TR.X, TR.n, P, S.TH);
+  const allIdx = new Array(TR.n);
+  for(let i = 0; i < TR.n; i++) allIdx[i] = i;
+  document.getElementById("prog-tree").style.width = "45%";
+  await sleep(30);
+  const impT = new Float64Array(P);
+  const tree = growTree(allIdx, S.BK, TR.y, P, S.TH, 10, 20, 1, rnd, impT);
+  S.pred.tree = new Float64Array(TE.n);
+  for(let i = 0; i < TE.n; i++) S.pred.tree[i] = predictTree(tree, TE.X, i, P);
+  S.metrics.tree = metrics(TE.y, S.pred.tree);
+  S.tree = tree;
+  document.getElementById("prog-tree").style.width = "100%";
+  showMetrics("tree");
+  log("Decision Tree trained successfully! " + countNodes(tree) + " nodes, depth 10 (" +
+      Math.round(performance.now() - t0) + " ms)");
+  logMetrics("Decision Tree", S.metrics.tree);
+  await sleep(120);
+
+  // forest
+  status("Growing 100 trees…");
+  log("\n# STEP 23 — RANDOM FOREST", "cmt");
+  t0 = performance.now();
+  const imp = new Float64Array(P);
+  const forest = [];
+  const votes = new Float64Array(TE.n);
+  for(let k = 0; k < N_TREES; k++){
+    const bs = new Array(TR.n);
+    for(let i = 0; i < TR.n; i++) bs[i] = Math.floor(rnd() * TR.n);
+    const t = growTree(bs, S.BK, TR.y, P, S.TH, 12, 20, 1 / 3, rnd, imp);
+    forest.push(t);
+    for(let i = 0; i < TE.n; i++) votes[i] += predictTree(t, TE.X, i, P);
+    if(k % 5 === 4 || k === N_TREES - 1){
+      document.getElementById("prog-rf").style.width = ((k + 1) / N_TREES * 100) + "%";
+      status("Growing 100 trees… " + (k + 1) + "/" + N_TREES);
+      await sleep(0);
+    }
+  }
+  S.pred.rf = new Float64Array(TE.n);
+  for(let i = 0; i < TE.n; i++) S.pred.rf[i] = votes[i] / N_TREES;
+  S.metrics.rf = metrics(TE.y, S.pred.rf);
+  S.forest = forest;
+  S.importance = imp;
+  showMetrics("rf");
+  log("Random Forest trained successfully! (" + Math.round(performance.now() - t0) + " ms)");
+  logMetrics("Random Forest", S.metrics.rf);
+
+  // best
+  const best = MODELS.slice().sort((a, b) => S.metrics[a.key].rmse - S.metrics[b.key].rmse)[0];
+  S.best = best.key;
+  document.getElementById("card-" + best.key).classList.add("best");
+  log("\n# STEP 25 — SELECT BEST MODEL", "cmt");
+  log("Best ML model: " + best.name, "hd");
+  renderModelCharts();
+}
+
+function showMetrics(k){
+  const m = S.metrics[k];
+  document.getElementById("mae-" + k).textContent = fmt(m.mae, 2);
+  document.getElementById("rmse-" + k).textContent = fmt(m.rmse, 2);
+  document.getElementById("r2-" + k).textContent = fmt(m.r2, 4);
+}
+function logMetrics(name, m){
+  log(name + " Results", "hd");
+  log("MAE:  " + fmt(m.mae, 4) + "\nRMSE: " + fmt(m.rmse, 4) + "\nR²:   " + fmt(m.r2, 4), "val");
+}
+
+/* ==========================================================================
+   5. CHARTS
+   ========================================================================== */
+
+function setup(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 420, h = cv.clientHeight || 220;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  return {c, w, h};
+}
+function niceMax(v){
+  if(!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+}
+function fmtAxis(v){
+  if(Math.abs(v) >= 1000) return (v / 1000).toFixed(1) + "k";
+  if(Math.abs(v) >= 10 || v === 0) return String(Math.round(v));
+  return v.toFixed(2);
+}
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#3ddc97";
+}
+function rgba(hex, a){
+  if(hex.startsWith("var")) hex = cssVar(hex.slice(4, -1));
+  const n = parseInt(hex.slice(1), 16);
+  return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+}
+function solid(hex){ return hex.startsWith("var") ? cssVar(hex.slice(4, -1)) : hex; }
+
+function axes(c, w, h, pad, max, min){
+  min = min || 0;
+  c.font = "10px ui-monospace,Menlo,monospace";
+  c.strokeStyle = "rgba(255,255,255,0.07)";
+  c.fillStyle = "#5f7997";
+  c.lineWidth = 1;
+  c.textAlign = "right"; c.textBaseline = "middle";
+  for(let g = 0; g <= 4; g++){
+    const v = min + (max - min) * g / 4;
+    const y = Math.round(h - pad.b - (h - pad.t - pad.b) * ((v - min) / (max - min))) + 0.5;
+    c.beginPath(); c.moveTo(pad.l, y); c.lineTo(w - pad.r, y); c.stroke();
+    c.fillText(fmtAxis(v), pad.l - 7, y);
+  }
+}
+
+function renderGrouped(cv, groups, series){
+  const {c, w, h} = setup(cv);
+  const pad = {l:46, r:12, t:16, b:34};
+  let max = 0;
+  series.forEach(s => s.values.forEach(v => { if(v > max) max = v; }));
+  max = niceMax(max * 1.15);
+  axes(c, w, h, pad, max);
+  const gw = (w - pad.l - pad.r) / groups.length;
+  const bw = Math.min(34, gw / (series.length + 0.8));
+  groups.forEach((g, gi) => {
+    const cx = pad.l + gw * (gi + 0.5);
+    series.forEach((s, si) => {
+      const v = s.values[gi];
+      const x = cx + (si - (series.length - 1) / 2) * (bw + 4) - bw / 2;
+      const bh = (h - pad.t - pad.b) * (v / max);
+      c.fillStyle = rgba(s.color, 0.85);
+      c.fillRect(x, h - pad.b - bh, bw, bh);
+      c.fillStyle = "#e8f1fb";
+      c.font = "10px ui-monospace,Menlo,monospace";
+      c.textAlign = "center"; c.textBaseline = "bottom";
+      c.fillText(fmtAxis(v), x + bw / 2, h - pad.b - bh - 3);
+    });
+    c.fillStyle = "#8ea8c6";
+    c.font = "11px Inter,sans-serif";
+    c.textAlign = "center"; c.textBaseline = "top";
+    c.fillText(g, cx, h - pad.b + 8);
+  });
+}
+
+function renderHBars(cv, labels, values, color){
+  const {c, w, h} = setup(cv);
+  const pad = {l:132, r:44, t:6, b:6};
+  const max = Math.max.apply(null, values.concat([1e-9]));
+  const rowH = (h - pad.t - pad.b) / labels.length;
+  labels.forEach((lb, i) => {
+    const y = pad.t + rowH * i + rowH * 0.16;
+    const bh = rowH * 0.68;
+    const bw = (w - pad.l - pad.r) * (values[i] / max);
+    c.fillStyle = rgba(color, 0.2);
+    c.fillRect(pad.l, y, w - pad.l - pad.r, bh);
+    c.fillStyle = rgba(color, 0.9);
+    c.fillRect(pad.l, y, bw, bh);
+    c.fillStyle = "#8ea8c6";
+    c.font = "11px ui-monospace,Menlo,monospace";
+    c.textAlign = "right"; c.textBaseline = "middle";
+    c.fillText(lb, pad.l - 8, y + bh / 2);
+    c.fillStyle = "#e8f1fb";
+    c.textAlign = "left";
+    c.fillText(values[i].toFixed(1) + "%", pad.l + bw + 7, y + bh / 2);
+  });
+}
+
+function renderScatter(cv, xs, ys, color){
+  const {c, w, h} = setup(cv);
+  const pad = {l:46, r:14, t:14, b:32};
+  let max = 0;
+  for(let i = 0; i < xs.length; i++){ if(xs[i] > max) max = xs[i]; if(ys[i] > max) max = ys[i]; }
+  max = niceMax(max);
+  axes(c, w, h, pad, max);
+  const X = v => pad.l + (w - pad.l - pad.r) * (v / max);
+  const Y = v => h - pad.b - (h - pad.t - pad.b) * (v / max);
+  c.strokeStyle = "rgba(255,255,255,0.28)";
+  c.setLineDash([5, 5]);
+  c.beginPath(); c.moveTo(X(0), Y(0)); c.lineTo(X(max), Y(max)); c.stroke();
+  c.setLineDash([]);
+  c.fillStyle = rgba(color, 0.4);
+  for(let i = 0; i < xs.length; i++){
+    c.beginPath(); c.arc(X(xs[i]), Y(ys[i]), 1.9, 0, Math.PI * 2); c.fill();
+  }
+  c.fillStyle = "#5f7997";
+  c.font = "10.5px Inter,sans-serif";
+  c.textAlign = "center"; c.textBaseline = "top";
+  c.fillText("actual volume (next 15 min)", (pad.l + w - pad.r) / 2, h - 14);
+  c.save(); c.translate(11, (pad.t + h - pad.b) / 2); c.rotate(-Math.PI / 2);
+  c.textBaseline = "top"; c.fillText("predicted", 0, 0); c.restore();
+}
+
+function renderHistogram(cv, values, color){
+  const {c, w, h} = setup(cv);
+  const pad = {l:46, r:12, t:14, b:32};
+  let lo = Infinity, hi = -Infinity;
+  for(const v of values){ if(v < lo) lo = v; if(v > hi) hi = v; }
+  const span = Math.max(Math.abs(lo), Math.abs(hi));
+  lo = -span; hi = span;
+  const NB = 41, bins = new Array(NB).fill(0);
+  for(const v of values){
+    let b = Math.floor((v - lo) / (hi - lo) * NB);
+    b = Math.max(0, Math.min(NB - 1, b));
+    bins[b]++;
+  }
+  const max = niceMax(Math.max.apply(null, bins) * 1.1);
+  axes(c, w, h, pad, max);
+  const bw = (w - pad.l - pad.r) / NB;
+  bins.forEach((v, i) => {
+    const bh = (h - pad.t - pad.b) * (v / max);
+    c.fillStyle = rgba(color, 0.8);
+    c.fillRect(pad.l + i * bw + 0.5, h - pad.b - bh, bw - 1, bh);
+  });
+  const zx = pad.l + (w - pad.l - pad.r) * ((0 - lo) / (hi - lo));
+  c.strokeStyle = "rgba(255,255,255,0.35)";
+  c.beginPath(); c.moveTo(zx, pad.t); c.lineTo(zx, h - pad.b); c.stroke();
+  c.fillStyle = "#5f7997";
+  c.font = "10.5px Inter,sans-serif";
+  c.textAlign = "center"; c.textBaseline = "top";
+  c.fillText("predicted − actual (vehicles per 15 min)", (pad.l + w - pad.r) / 2, h - 14);
+  c.fillText(fmtAxis(lo), pad.l + 6, h - pad.b + 5);
+  c.fillText(fmtAxis(hi), w - pad.r - 12, h - pad.b + 5);
+}
+
+function renderLines(cv, series, opts){
+  opts = opts || {};
+  const {c, w, h} = setup(cv);
+  const pad = {l:46, r:14, t:14, b:28};
+  const n = series[0].values.length;
+  let max = 0;
+  series.forEach(s => s.values.forEach(v => { if(v > max) max = v; }));
+  max = niceMax(max * 1.1);
+  const minY = opts.min != null ? opts.min : 0;
+  axes(c, w, h, pad, max, minY);
+  const X = i => pad.l + (w - pad.l - pad.r) * (n <= 1 ? 0 : i / (n - 1));
+  const Y = v => h - pad.b - (h - pad.t - pad.b) * ((v - minY) / (max - minY));
+  c.font = "10px ui-monospace,Menlo,monospace";
+  c.fillStyle = "#5f7997"; c.textAlign = "center"; c.textBaseline = "top";
+  (opts.xLabels || []).forEach((lb, i) => { if(lb) c.fillText(lb, X(i), h - pad.b + 6); });
+  if(opts.marker != null){
+    const x = Math.round(X(opts.marker)) + 0.5;
+    c.strokeStyle = "rgba(255,176,32,0.85)"; c.setLineDash([4, 4]);
+    c.beginPath(); c.moveTo(x, pad.t); c.lineTo(x, h - pad.b); c.stroke();
+    c.setLineDash([]);
+  }
+  series.forEach(s => {
+    if(s.fill){
+      const g = c.createLinearGradient(0, pad.t, 0, h - pad.b);
+      g.addColorStop(0, rgba(s.color, 0.25)); g.addColorStop(1, rgba(s.color, 0));
+      c.beginPath(); c.moveTo(X(0), Y(s.values[0]));
+      for(let i = 1; i < n; i++) c.lineTo(X(i), Y(s.values[i]));
+      c.lineTo(X(n - 1), h - pad.b); c.lineTo(X(0), h - pad.b); c.closePath();
+      c.fillStyle = g; c.fill();
+    }
+    c.beginPath(); c.moveTo(X(0), Y(s.values[0]));
+    for(let i = 1; i < n; i++) c.lineTo(X(i), Y(s.values[i]));
+    c.strokeStyle = solid(s.color); c.lineWidth = s.width || 2;
+    c.lineJoin = "round";
+    c.setLineDash(s.dash || []);
+    c.stroke(); c.setLineDash([]);
+  });
+  if(opts.hover != null && opts.hover >= 0 && opts.hover < n){
+    const x = Math.round(X(opts.hover)) + 0.5;
+    c.strokeStyle = "rgba(255,255,255,0.3)";
+    c.beginPath(); c.moveTo(x, pad.t); c.lineTo(x, h - pad.b); c.stroke();
+    series.forEach(s => {
+      c.beginPath(); c.arc(X(opts.hover), Y(s.values[opts.hover]), 4, 0, Math.PI * 2);
+      c.fillStyle = solid(s.color); c.fill();
+      c.strokeStyle = "#071624"; c.lineWidth = 2; c.stroke();
+    });
+  }
+  if(opts.legend){
+    let lx = pad.l + 6;
+    series.forEach(s => {
+      c.fillStyle = solid(s.color);
+      c.fillRect(lx, pad.t - 6, 14, 3);
+      c.fillStyle = "#8ea8c6"; c.font = "10.5px Inter,sans-serif";
+      c.textAlign = "left"; c.textBaseline = "middle";
+      c.fillText(s.name, lx + 19, pad.t - 4);
+      lx += 26 + c.measureText(s.name).width;
+    });
+  }
+  cv._geom = {padL: pad.l, padR: pad.r, w, n};
+}
+
+/* ==========================================================================
+   6. PREDICTION VIEWS
+   ========================================================================== */
+
+let currentModel = "rf";
+
+function renderModelCharts(){
+  renderGrouped(document.getElementById("chartErr"), ["MAE", "RMSE"],
+    MODELS.map(m => ({name: m.name, color: m.color,
+      values: [S.metrics[m.key].mae, S.metrics[m.key].rmse]})));
+  renderGrouped(document.getElementById("chartR2"), ["R²"],
+    MODELS.map(m => ({name: m.name, color: m.color, values: [S.metrics[m.key].r2]})));
+}
+
+function initPredictionControls(){
+  currentModel = S.best;
+  document.querySelectorAll("#modelPick button").forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.m === currentModel));
+    b.onclick = () => {
+      currentModel = b.dataset.m;
+      document.querySelectorAll("#modelPick button").forEach(o =>
+        o.setAttribute("aria-pressed", String(o.dataset.m === currentModel)));
+      renderPredictions();
+    };
+  });
+
+  // count locations present in the test set
+  const groups = new Map();
+  S.testRows.forEach((r, i) => {
+    const k = r.SegmentID + "|" + r.Direction;
+    if(!groups.has(k)) groups.set(k, {label: r.street + " " + r.Direction + " · " + r.Boro, days: new Map()});
+    const g = groups.get(k);
+    const dk = r.Yr + "-" + String(r.M).padStart(2, "0") + "-" + String(r.D).padStart(2, "0");
+    if(!g.days.has(dk)) g.days.set(dk, []);
+    g.days.get(dk).push(i);
+  });
+  S.groups = groups;
+  const segSel = document.getElementById("predSeg");
+  segSel.innerHTML = "";
+  Array.from(groups.keys()).forEach(k => {
+    const o = document.createElement("option");
+    o.value = k; o.textContent = groups.get(k).label;
+    segSel.appendChild(o);
+  });
+  segSel.onchange = () => { fillDays(); renderSeries(); };
+  document.getElementById("predDay").onchange = renderSeries;
+  fillDays();
+}
+function fillDays(){
+  const g = S.groups.get(document.getElementById("predSeg").value);
+  const sel = document.getElementById("predDay");
+  sel.innerHTML = "";
+  Array.from(g.days.keys()).sort().forEach(d => {
+    const o = document.createElement("option");
+    o.value = d;
+    o.textContent = d + " (" + DAY_LONG[dowOf(Date.parse(d + "T00:00:00Z"))] + ")";
+    sel.appendChild(o);
+  });
+}
+const DAY_LONG = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+function renderPredictions(){
+  const p = S.pred[currentModel], y = S.TE.y;
+  const color = MODELS.find(m => m.key === currentModel).color;
+  const stride = Math.max(1, Math.floor(y.length / 2600));
+  const xs = [], ys = [], res = [];
+  for(let i = 0; i < y.length; i += stride){ xs.push(y[i]); ys.push(p[i]); }
+  for(let i = 0; i < y.length; i++) res.push(p[i] - y[i]);
+  renderScatter(document.getElementById("chartScatter"), xs, ys, color);
+  renderHistogram(document.getElementById("chartResid"), res, color);
+  renderSeries();
+}
+
+function renderSeries(){
+  const g = S.groups.get(document.getElementById("predSeg").value);
+  const dayKey = document.getElementById("predDay").value;
+  const idxs = (g.days.get(dayKey) || []).slice().sort((a, b) => S.testRows[a].ts - S.testRows[b].ts);
+  const actual = idxs.map(i => S.testRows[i].target);
+  const pred = idxs.map(i => S.pred[currentModel][i]);
+  const labels = idxs.map(i => {
+    const r = S.testRows[i];
+    return r.MM === 0 && r.HH % 3 === 0 ? String(r.HH).padStart(2, "0") : "";
+  });
+  const color = MODELS.find(m => m.key === currentModel).color;
+  S.seriesState = {actual, pred, labels, idxs, color};
+  renderLines(document.getElementById("chartSeries"), [
+    {name:"counted", color:"#8ea8c6", values: actual, width:2},
+    {name:"forecast", color: color, values: pred, width:2, dash:[6, 4]}
+  ], {xLabels: labels, legend: true});
+  document.getElementById("seriesTitle").textContent =
+    g.label + " — " + dayKey + ", every 15 minutes";
+}
+
+const seriesCv = document.getElementById("chartSeries");
+seriesCv.addEventListener("mousemove", e => {
+  if(!S.seriesState || !seriesCv._geom) return;
+  const gm = seriesCv._geom, r = seriesCv.getBoundingClientRect();
+  const inner = gm.w - gm.padL - gm.padR;
+  let i = Math.round((e.clientX - r.left - gm.padL) / (inner / (gm.n - 1)));
+  i = Math.max(0, Math.min(gm.n - 1, i));
+  const st = S.seriesState;
+  renderLines(seriesCv, [
+    {name:"counted", color:"#8ea8c6", values: st.actual, width:2},
+    {name:"forecast", color: st.color, values: st.pred, width:2, dash:[6, 4]}
+  ], {xLabels: st.labels, legend:true, hover:i});
+  const tip = document.getElementById("seriesTip");
+  const row = S.testRows[st.idxs[i]];
+  const t = new Date(row.ts + 900000);
+  tip.style.display = "block";
+  tip.innerHTML = String(t.getUTCHours()).padStart(2, "0") + ":" + String(t.getUTCMinutes()).padStart(2, "0") +
+    " — counted <b>" + st.actual[i] + "</b>, forecast <b>" + Math.round(st.pred[i]) + "</b>";
+  const x = gm.padL + inner * (i / (gm.n - 1));
+  tip.style.left = Math.max(0, Math.min(gm.w - tip.offsetWidth, x - tip.offsetWidth / 2)) + "px";
+  tip.style.top = "2px";
+});
+seriesCv.addEventListener("mouseleave", () => {
+  document.getElementById("seriesTip").style.display = "none";
+  if(S.seriesState) renderSeries();
+});
+
+function renderImportance(){
+  const total = S.importance.reduce((a, b) => a + b, 0) || 1;
+  const pairs = S.FEATS.map((f, i) => ({f, v: S.importance[i] / total * 100}))
+    .sort((a, b) => b.v - a.v).slice(0, 10);
+  renderHBars(document.getElementById("chartImp"),
+    pairs.map(p => p.f), pairs.map(p => p.v), "var(--rf)");
+}
+
+/* ==========================================================================
+   7. OPERATIONS RESEARCH  (steps 26–29)
+   ========================================================================== */
+
+const CYCLE = 60;
+let optState = null;
+
+function directionMeans(filter){
+  const sums = {}, counts = {};
+  DIRS.forEach(d => { sums[d] = 0; counts[d] = 0; });
+  const p = S.pred[S.best];
+  for(let i = 0; i < S.testRows.length; i++){
+    const r = S.testRows[i];
+    if(filter && !filter(r)) continue;
+    sums[r.Direction] += p[i]; counts[r.Direction]++;
+  }
+  const out = {};
+  DIRS.forEach(d => { out[d] = counts[d] ? sums[d] / counts[d] : 0; });
+  return out;
+}
+function objective(g, ns, ew){
+  return ns * Math.pow((CYCLE - g) / CYCLE, 2) + ew * Math.pow(g / CYCLE, 2);
+}
+function optimise(ns, ew){                      // scipy.optimize.minimize with bounds (10, 50)
+  let bestG = 10, bestV = Infinity;
+  for(let g = 10; g <= 50 + 1e-9; g += 0.005){
+    const v = objective(g, ns, ew);
+    if(v < bestV){ bestV = v; bestG = g; }
+  }
+  return {g: bestG, value: bestV};
+}
+
+function initOptimisation(){
+  const sel = document.getElementById("optHour");
+  sel.innerHTML = "<option value='-1'>every hour in the test set</option>";
+  for(let h = 0; h < 24; h++){
+    const o = document.createElement("option");
+    o.value = String(h);
+    o.textContent = String(h).padStart(2, "0") + ":00";
+    sel.appendChild(o);
+  }
+  sel.value = "-1";
+  sel.onchange = () => { computeOptimisation(); };
+
+  if(!S.sliderBound){
+    S.sliderBound = true;
+    document.getElementById("gSlider").addEventListener("input", e => {
+      if(optState) drawObjective(Number(e.target.value));
+    });
+  }
+
+  computeOptimisation(true);
+}
+
+function computeOptimisation(first){
+  const hourSel = Number(document.getElementById("optHour").value);
+  const means = directionMeans(hourSel < 0 ? null : r => r.HH === hourSel);
+  const ns = means.NB + means.SB, ew = means.EB + means.WB;
+  const opt = optimise(ns, ew);
+  const fixed = objective(30, ns, ew);
+  const improvement = (fixed - opt.value) / fixed * 100;
+  optState = {ns, ew, opt, fixed, improvement, hour: hourSel};
+
+  if(first){
+    log("\n# STEP 26 — PREDICTED TRAFFIC BY DIRECTION", "cmt");
+    DIRS.forEach(d => log("  " + d + "    " + fmt(means[d], 6)));
+    log("\n# STEP 27 — COMBINE DIRECTIONS", "cmt");
+    log("Predicted NS traffic: " + fmt(ns, 6));
+    log("Predicted EW traffic: " + fmt(ew, 6));
+    log("\n# STEP 28 — TRAFFIC LIGHT OPTIMIZATION", "cmt");
+    log("Optimization successful: True", "val");
+    log("Optimal NS green time: " + fmt(opt.g, 4));
+    log("Optimal EW green time: " + fmt(CYCLE - opt.g, 4));
+    log("Objective value: " + fmt(opt.value, 4));
+    log("\n# STEP 29 — FIXED VS OPTIMIZED", "cmt");
+    log("Fixed 30/30 delay proxy: " + fmt(fixed, 4));
+    log("Optimized delay proxy:   " + fmt(opt.value, 4));
+    log("Improvement: " + fmt(improvement, 4) + " %", "val");
+    log("\n===================================", "hd");
+    log("FINAL PROJECT RESULTS", "hd");
+    log("===================================", "hd");
+    log("Best model: " + MODELS.find(m => m.key === S.best).name +
+        "   R² " + fmt(S.metrics[S.best].r2, 4) + "   MAE " + fmt(S.metrics[S.best].mae, 3));
+    log("NS " + fmt(ns, 2) + " veh/15min   EW " + fmt(ew, 2) + " veh/15min");
+    log("Green split " + fmt(opt.g, 1) + " s NS / " + fmt(CYCLE - opt.g, 1) + " s EW", "val");
+    log("Delay proxy " + fmt(fixed, 1) + " → " + fmt(opt.value, 1) +
+        "  (" + fmt(improvement, 2) + "% better)", "val");
+  }
+
+  document.getElementById("demandKpis").innerHTML = [
+    ["North–south demand", fmtInt(ns * 4) + " veh/h", "NB " + fmt(means.NB, 0) + " + SB " + fmt(means.SB, 0) + " per 15 min"],
+    ["East–west demand", fmtInt(ew * 4) + " veh/h", "EB " + fmt(means.EB, 0) + " + WB " + fmt(means.WB, 0) + " per 15 min"],
+    ["Optimal NS green", fmt(opt.g, 1) + " s", "of a " + CYCLE + " s green cycle"],
+    ["Optimal EW green", fmt(CYCLE - opt.g, 1) + " s", "the remainder"]
+  ].map(k => "<div class='kpi'><div class='v'>" + k[1] + "</div><div class='k'>" + k[0] +
+    "</div><div class='k' style='color:var(--muted);margin-top:3px'>" + k[2] + "</div></div>").join("");
+
+  document.getElementById("optKpis").innerHTML = [
+    ["Fixed 30 / 30", fmt(fixed, 1), "delay proxy", ""],
+    ["Optimised", fmt(opt.value, 1), "delay proxy", "win"],
+    ["Improvement", fmt(improvement, 2) + "%", "lower delay proxy", "win"]
+  ].map(k => "<div class='kpi " + k[3] + "'><div class='v'>" + k[1] + "</div><div class='k'>" + k[0] +
+    "</div><div class='k' style='color:var(--muted);margin-top:3px'>" + k[2] + "</div></div>").join("");
+
+  document.getElementById("optNote").textContent =
+    improvement < 1
+      ? "The two phases are close to balanced at this hour, so retiming buys very little — the honest answer is that a 30/30 split was already near optimal."
+      : "Green time follows demand: the busier phase gets " +
+        fmt(Math.max(opt.g, CYCLE - opt.g), 1) + " seconds and the quieter one " +
+        fmt(Math.min(opt.g, CYCLE - opt.g), 1) + ".";
+
+  document.getElementById("optSplit").textContent =
+    fmt(opt.g, 1) + " s · " + fmt(CYCLE - opt.g, 1) + " s";
+  document.getElementById("gSlider").value = opt.g.toFixed(1);
+  drawObjective(opt.g);
+  startSignals();
+}
+
+function drawObjective(gPick){
+  const {ns, ew, opt} = optState;
+  const values = [], labels = [];
+  for(let i = 0; i <= 80; i++){
+    const g = 10 + i * 0.5;
+    values.push(objective(g, ns, ew));
+    labels.push(i % 10 === 0 ? String(Math.round(g)) : "");
+  }
+  const markIdx = Math.round((opt.g - 10) / 0.5);
+  const pickIdx = Math.round((gPick - 10) / 0.5);
+  renderLines(document.getElementById("chartObj"),
+    [{name:"delay proxy", color:"var(--signal)", values, fill:true, width:2}],
+    {xLabels: labels, marker: markIdx, hover: pickIdx});
+  document.getElementById("gLabel").textContent = fmt(gPick, 1) + " s";
+  const v = objective(gPick, ns, ew);
+  const pct = (v - opt.value) / opt.value * 100;
+  document.getElementById("objNote").innerHTML =
+    "At " + fmt(gPick, 1) + " s north–south green the proxy is <b>" + fmt(v, 1) + "</b>" +
+    (pct < 0.05 ? " — that is the minimum." : ", which is " + fmt(pct, 1) + "% worse than the optimum at " +
+      fmt(opt.g, 1) + " s. The dashed line marks where the optimiser landed.");
+}
+
+/* ---- the two intersections ---- */
+const SAT = 1.0;                              // vehicles per second of green (3600 veh/h)
+let signalRAF = null;
+
+function makeSignal(gNS){
+  return {
+    gNS, t:0, phase:0, qNS:0, qEW:0, delay:0,
+    arrNS:0, arrEW:0, servedNS:0, servedEW:0
+  };
+}
+function stepSignal(s, dt, lamNS, lamEW){
+  const gEW = CYCLE - s.gNS;
+  s.t += dt;
+  if(s.phase === 0 && s.t >= s.gNS){ s.phase = 1; s.t = 0; }
+  else if(s.phase === 1 && s.t >= gEW){ s.phase = 0; s.t = 0; }
+  s.qNS += lamNS * dt; s.qEW += lamEW * dt;
+  if(s.phase === 0) s.qNS = Math.max(0, s.qNS - SAT * dt);
+  else s.qEW = Math.max(0, s.qEW - SAT * dt);
+  s.delay += (s.qNS + s.qEW) * dt;
+}
+function drawSignal(cv, s){
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 320, h = 230;
+  if(cv.width !== Math.round(w * dpr)){ cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2, road = 46;
+
+  c.fillStyle = "#0e2942";
+  c.fillRect(0, cy - road / 2, w, road);
+  c.fillRect(cx - road / 2, 0, road, h);
+  c.strokeStyle = "rgba(255,255,255,0.16)";
+  c.setLineDash([7, 8]); c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(0, cy); c.lineTo(w, cy); c.stroke();
+  c.beginPath(); c.moveTo(cx, 0); c.lineTo(cx, h); c.stroke();
+  c.setLineDash([]);
+
+  const green = "#3ddc97", red = "#ff5d5d";
+  const nsGreen = s.phase === 0;
+  c.lineWidth = 4;
+  c.strokeStyle = nsGreen ? green : red;
+  c.beginPath(); c.moveTo(cx - road / 2, cy + road / 2 + 3); c.lineTo(cx + road / 2, cy + road / 2 + 3); c.stroke();
+  c.beginPath(); c.moveTo(cx - road / 2, cy - road / 2 - 3); c.lineTo(cx + road / 2, cy - road / 2 - 3); c.stroke();
+  c.strokeStyle = nsGreen ? red : green;
+  c.beginPath(); c.moveTo(cx - road / 2 - 3, cy - road / 2); c.lineTo(cx - road / 2 - 3, cy + road / 2); c.stroke();
+  c.beginPath(); c.moveTo(cx + road / 2 + 3, cy - road / 2); c.lineTo(cx + road / 2 + 3, cy + road / 2); c.stroke();
+
+  // queues drawn as stacked vehicles on each approach
+  const car = (x, y, vert, col) => {
+    c.fillStyle = col; c.strokeStyle = "#06121f"; c.lineWidth = 1;
+    const ww = vert ? 12 : 17, hh = vert ? 17 : 12;
+    c.fillRect(x - ww / 2, y - hh / 2, ww, hh);
+    c.strokeRect(x - ww / 2, y - hh / 2, ww, hh);
+  };
+  const nNS = Math.min(9, Math.round(s.qNS)), nEW = Math.min(9, Math.round(s.qEW));
+  for(let i = 0; i < nNS; i++){
+    car(cx - 11, cy + road / 2 + 14 + i * 21, true, nsGreen ? "#5ee0a8" : "#ff8f6a");
+    car(cx + 11, cy - road / 2 - 14 - i * 21, true, nsGreen ? "#5ee0a8" : "#ff8f6a");
+  }
+  for(let i = 0; i < nEW; i++){
+    car(cx - road / 2 - 16 - i * 24, cy + 11, false, !nsGreen ? "#5ee0a8" : "#ff8f6a");
+    car(cx + road / 2 + 16 + i * 24, cy - 11, false, !nsGreen ? "#5ee0a8" : "#ff8f6a");
+  }
+
+  c.fillStyle = "#8ea8c6";
+  c.font = "10.5px ui-monospace,Menlo,monospace";
+  c.textAlign = "left"; c.textBaseline = "top";
+  const phaseName = nsGreen ? "NS green" : "EW green";
+  const left = nsGreen ? s.gNS - s.t : (CYCLE - s.gNS) - s.t;
+  c.fillText(phaseName + "  " + left.toFixed(1) + " s", 8, 8);
+}
+
+function startSignals(){
+  if(signalRAF) cancelAnimationFrame(signalRAF);
+  const lamNS = optState.ns * 4 / 3600;         // veh/15min → veh/h → veh/s
+  const lamEW = optState.ew * 4 / 3600;
+  const fixed = makeSignal(30);
+  const opt = makeSignal(optState.opt.g);
+  document.getElementById("fixedSplit").textContent = "30.0 s · 30.0 s";
+  const cvF = document.getElementById("sigFixed"), cvO = document.getElementById("sigOpt");
+  let last = performance.now();
+  const SPEED = 6;                              // 6 simulated seconds per real second
+
+  function frame(now){
+    let dt = Math.min(0.25, (now - last) / 1000) * SPEED;
+    last = now;
+    for(let k = 0; k < 6; k++){
+      stepSignal(fixed, dt / 6, lamNS, lamEW);
+      stepSignal(opt, dt / 6, lamNS, lamEW);
+    }
+    drawSignal(cvF, fixed); drawSignal(cvO, opt);
+    document.getElementById("fq1").textContent = fixed.qNS.toFixed(1);
+    document.getElementById("fq2").textContent = fixed.qEW.toFixed(1);
+    document.getElementById("fd").textContent = fmtInt(fixed.delay);
+    document.getElementById("oq1").textContent = opt.qNS.toFixed(1);
+    document.getElementById("oq2").textContent = opt.qEW.toFixed(1);
+    document.getElementById("od").textContent = fmtInt(opt.delay);
+    if(fixed.delay > 0){
+      const gain = (fixed.delay - opt.delay) / fixed.delay * 100;
+      document.getElementById("simNote").textContent =
+        "Identical arrivals, " + fmtInt(lamNS * 3600) + " veh/h north–south and " +
+        fmtInt(lamEW * 3600) + " veh/h east–west, at a saturation flow of 3600 veh/h of green. " +
+        "So far the optimised split has accumulated " + fmt(Math.abs(gain), 1) + "% " +
+        (gain >= 0 ? "less" : "more") + " waiting time.";
+    }
+    signalRAF = requestAnimationFrame(frame);
+  }
+  signalRAF = requestAnimationFrame(frame);
+}
+
+/* ==========================================================================
+   8. BOOT
+   ========================================================================== */
+
+document.getElementById("runAll").addEventListener("click", async () => {
+  const btn = document.getElementById("runAll");
+  btn.disabled = true;
+  logEl.innerHTML = "";
+  document.getElementById("funnel").innerHTML = "";
+  FUNNEL.length = 0;
+  if(signalRAF) cancelAnimationFrame(signalRAF);
+  document.getElementById("logDot").className = "dot run";
+  document.getElementById("logTitle").textContent = "notebook output — running";
+  STAGES.forEach(s => {
+    const chip = document.getElementById("chip-" + s.id);
+    chip.classList.remove("active", "done");
+  });
+  try{
+    await runPipeline();
+  } catch(err){
+    log("\nTraceback (most recent call last):\n" + err.message, "warn");
+    status("Something went wrong — see the output");
+    btn.disabled = false;
+  }
+});
+
+let resizeT = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    if(!S.metrics) return;
+    renderModelCharts(); renderPredictions(); renderImportance();
+    if(optState) drawObjective(Number(document.getElementById("gSlider").value));
+  }, 180);
+});
+
+log("# ============================================================", "cmt");
+log("# TRAFFIC PREDICTION + OPERATIONS RESEARCH PROJECT", "cmt");
+log("# NYC Traffic Volume Data", "cmt");
+log("# ============================================================", "cmt");
+log("\nPress “Run the pipeline” to execute steps 1 through 29.");
+</script>
+</body>
+</html>
